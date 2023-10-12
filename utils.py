@@ -18,7 +18,7 @@ class combined_signature:
 
 class MSG:
     def __init__(self, type_, node, qc, hs_glob: Global_Variables):
-        self.type = type_
+        self.type_ = type_
         self.node = node
         self.view_number = hs_glob.current_view_number
         self.justify = qc
@@ -34,4 +34,9 @@ class QC:
         self.node = vote_list[0].node
         self.sig = combined_signature(vote_list)
 
+def matching_msg(m:MSG, t, v):
+    return m.type_ == t and m.view_number == v
+
+def matching_qc(qc:QC, t, v):
+    return qc.view_number == v and qc.node == t
 
