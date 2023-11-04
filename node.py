@@ -1,5 +1,5 @@
 from utils import MSG, signature, QC
-import multiprocessing as mp
+import threading
 import time
 
 
@@ -65,6 +65,7 @@ class Worker:
         self.last_view_msg = []
         self.message_queues = message_queues
         self.is_b_node = is_b_worker
+        self. prefetch = True
 
     def vote_msg(self, type_, node, qc):
         temp_msg = MSG(type_, node, qc, hs_glob=self.hs_glob)
@@ -94,6 +95,8 @@ class Worker:
 
     def dummy_exec(self, cmd):
         print("worker {} executing command: ".format(self.worker_id), cmd)
+        if not self.prefetch:
+            self.load_from_disk()
 
     def protocol_process(self):
         if self.hs_glob.current_leader == self.worker_id:
@@ -104,7 +107,6 @@ class Worker:
             self.next_leader_process()
         print("worker {} finished processing".format(self.worker_id))
         self.chain_tree.travel_tree(self.chain_tree.root, self.worker_id)
-
 
     def leader_process(self):
         print("leader {} is processing".format(self.worker_id))
@@ -147,6 +149,9 @@ class Worker:
         print("last view msg", self.last_view_msg)
         self.generic_qc = QC(self.last_view_msg)
         self.hs_glob.move_to_next_view()
+        if self.prefetch:
+            t = threading.Thread(target=self.load_from_disk, args=())
+            t.start()
         print("next leader {} finished processing".format(self.worker_id))
 
     def dummy_next_view(self):
@@ -155,5 +160,8 @@ class Worker:
     def view_process(self):
         for i in range(len(self.hs_glob.cmd_list)):
             self.protocol_process()
+
+    def load_from_disk(self):
+        time.sleep(self.hs_glob.file_loading_time)
 
 

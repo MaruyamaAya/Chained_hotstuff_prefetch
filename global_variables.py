@@ -12,6 +12,7 @@ class Global_Variables:
         self.highest_node_id = 0
         self.cmd_list = cmd_list
         self.leader_list = leader_list
+        self.file_loading_time = 5
 
     def get_cmd(self):
         cur_cmd = self.cmd_list[self.current_view_number]
