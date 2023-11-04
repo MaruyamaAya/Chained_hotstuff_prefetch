@@ -18,6 +18,7 @@ class Global_Variables:
         cur_cmd = self.cmd_list[self.current_view_number]
         return cur_cmd
     def move_to_next_view(self):
+        print("move to next view")
         self.current_view_number += 1
         self.current_leader = self.leader_list[self.current_view_number]
         self.next_leader = self.leader_list[self.current_view_number + 1]

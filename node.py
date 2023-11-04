@@ -47,7 +47,7 @@ class Chain_tree:
     def travel_tree(self, node, worker_id):
         if node is None:
             return
-        print("node id: ", node.node_id, " cmd: ", node.cmd, " parent id: ", node.parent.node_id if node.parent is not None else None, " worker id: ", worker_id)
+        # print("node id: ", node.node_id, " cmd: ", node.cmd, " parent id: ", node.parent.node_id if node.parent is not None else None, " worker id: ", worker_id)
         for child in node.children:
             self.travel_tree(child, worker_id)
 
@@ -60,8 +60,10 @@ class Worker:
         self.worker_id = worker_id
         self.hs_glob = hs_glob
         self.locked_qc = None
-        self.generic_qc = None
+
         self.chain_tree = Chain_tree(hs_glob)
+        fake_qc = QC([MSG("FAKE", self.chain_tree.root, None, hs_glob=self.hs_glob)])
+        self.generic_qc = fake_qc
         self.last_view_msg = []
         self.message_queues = message_queues
         self.is_b_node = is_b_worker
@@ -105,24 +107,28 @@ class Worker:
 
         if self.hs_glob.next_leader == self.worker_id:
             self.next_leader_process()
-        print("worker {} finished processing".format(self.worker_id))
+        # print("worker {} finished processing".format(self.worker_id))
         self.chain_tree.travel_tree(self.chain_tree.root, self.worker_id)
 
     def leader_process(self):
-        print("leader {} is processing".format(self.worker_id))
+        # print("leader {} is processing".format(self.worker_id))
         if self.hs_glob.current_view_number == 0:
-            fake_msg = MSG("FAKE",self.chain_tree.root, None, self.hs_glob)
+            fake_qc = QC([MSG("FAKE", self.chain_tree.root, None, self.hs_glob)])
+            fake_msg = MSG("FAKE",self.chain_tree.root, fake_qc, self.hs_glob)
             self.generic_qc = QC([fake_msg])
         else:
+            for msg in self.last_view_msg:
+                print(msg.justify)
+            print("last view message", self.last_view_msg)
             high_qc = max(self.last_view_msg, key=lambda x: x.justify.view_number).justify
             if high_qc.view_number > self.generic_qc.view_number:
                 self.generic_qc = high_qc
         cur_proposal = self.chain_tree.create_leaf(self.generic_qc.node, self.hs_glob.get_cmd(), self.generic_qc)
         self.dummy_broadcast(MSG("GENERIC", cur_proposal, None, self.hs_glob))
-        print("leader {} broadcasted GENERIC msg".format(self.worker_id))
+        # print("leader {} broadcasted GENERIC msg".format(self.worker_id))
 
     def replica_process(self):
-        print("replica {} is processing".format(self.worker_id))
+        # print("replica {} is processing".format(self.worker_id))
         msg = self.dummy_recv() # TODO add matchingmsg
         b_star = msg.node
         high_qc = msg.node.justify
@@ -132,27 +138,28 @@ class Worker:
         b1 = self.chain_tree.leaf_dict[b2.justify.node_id] if b2.justify is not None else None
         b = self.chain_tree.leaf_dict[b1.justify.node_id] if b1 is not None and b1.justify is not None else None
         if self.hs_glob.current_view_number == 0 or self.safe_node(b_star, b_star.justify): # updated for the first round
-            self.dummy_send(self.vote_msg("GENERIC", b_star, None), self.hs_glob.next_leader)
+            print("approve")
+            self.dummy_send(self.vote_msg("GENERIC", b_star, self.generic_qc), self.hs_glob.next_leader)
         if b_star.parent == b2:
             self.generic_qc = b_star.justify
         if b_star.parent == b2 and b2.parent == b1:
             self.locked_qc = b2.justify
         if b_star.parent == b2 and b2.parent == b1 and b1.parent == b:
             self.dummy_exec(b_star.cmd)
-        print("replica {} finished processing".format(self.worker_id))
+        # print("replica {} finished processing".format(self.worker_id))
 
     def next_leader_process(self):
-        print("next leader {} is processing".format(self.worker_id))
+        # print("next leader {} is processing".format(self.worker_id))
         while self.message_queues[self.worker_id].qsize() < self.hs_glob.num_node - self.hs_glob.num_B_node:
             time.sleep(0.5)
         self.last_view_msg = [self.dummy_recv() for i in range(self.hs_glob.num_node - self.hs_glob.num_B_node)]
-        print("last view msg", self.last_view_msg)
+        # print("last view msg", self.last_view_msg)
         self.generic_qc = QC(self.last_view_msg)
         self.hs_glob.move_to_next_view()
         if self.prefetch:
             t = threading.Thread(target=self.load_from_disk, args=())
             t.start()
-        print("next leader {} finished processing".format(self.worker_id))
+        # print("next leader {} finished processing".format(self.worker_id))
 
     def dummy_next_view(self):
         pass
