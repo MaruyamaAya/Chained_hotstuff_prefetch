@@ -89,10 +89,13 @@ class Worker:
             self.message_queues[i].put(msg)
 
     def dummy_recv(self):
+        print("worker {} message queue has {} messages .".format(self.worker_id,
+                                                                 self.message_queues[self.worker_id].qsize()))
         msg = self.message_queues[self.worker_id].get()
         # check if the msg's view is up to date
         while msg.view_number < self.hs_glob.current_view_number:
             msg = self.message_queues[self.worker_id].get()
+        print("worker {} message queue has {} messages afterwards.".format(self.worker_id, self.message_queues[self.worker_id].qsize()))
         return msg
 
     def dummy_exec(self, cmd):
@@ -118,18 +121,20 @@ class Worker:
             self.generic_qc = QC([fake_msg])
         else:
             for msg in self.last_view_msg:
-                print(msg.justify)
-            print("last view message", self.last_view_msg)
+                print("justify", msg.justify)
+            # print("last view message", self.last_view_msg)
             high_qc = max(self.last_view_msg, key=lambda x: x.justify.view_number).justify
             if high_qc.view_number > self.generic_qc.view_number:
                 self.generic_qc = high_qc
         cur_proposal = self.chain_tree.create_leaf(self.generic_qc.node, self.hs_glob.get_cmd(), self.generic_qc)
+        time.sleep(10)
         self.dummy_broadcast(MSG("GENERIC", cur_proposal, None, self.hs_glob))
-        # print("leader {} broadcasted GENERIC msg".format(self.worker_id))
+        print("leader {} broadcasted GENERIC msg".format(self.worker_id))
 
     def replica_process(self):
         # print("replica {} is processing".format(self.worker_id))
         msg = self.dummy_recv() # TODO add matchingmsg
+        print("replica {} received msg {}".format(self.worker_id, msg))
         b_star = msg.node
         high_qc = msg.node.justify
         if self.worker_id != self.hs_glob.current_leader:
@@ -138,8 +143,11 @@ class Worker:
         b1 = self.chain_tree.leaf_dict[b2.justify.node_id] if b2.justify is not None else None
         b = self.chain_tree.leaf_dict[b1.justify.node_id] if b1 is not None and b1.justify is not None else None
         if self.hs_glob.current_view_number == 0 or self.safe_node(b_star, b_star.justify): # updated for the first round
-            print("approve")
+            # print("approve")
+            print("sending from worker {} to worker {}".format(self.worker_id, self.hs_glob.next_leader), self.generic_qc, '    ')
             self.dummy_send(self.vote_msg("GENERIC", b_star, self.generic_qc), self.hs_glob.next_leader)
+        # else:
+            # print("reject")
         if b_star.parent == b2:
             self.generic_qc = b_star.justify
         if b_star.parent == b2 and b2.parent == b1:
@@ -166,6 +174,7 @@ class Worker:
 
     def view_process(self):
         for i in range(len(self.hs_glob.cmd_list)):
+            print("worker {} is processing command {}".format(self.worker_id, i))
             self.protocol_process()
 
     def load_from_disk(self):
